@@ -138,11 +138,18 @@ PORT="$APP_PORT" pm2 start npm --name duitku -- start
 pm2 save
 
 if [[ -n "$DOMAIN" ]]; then
-  echo "==> Adding a NEW Nginx site for ${DOMAIN} (existing sites untouched)"
+  # Also serve the www. variant unless DOMAIN already has a subdomain
+  # (e.g. duitku.example.com) — avoids producing www.duitku.example.com.
+  if [[ "$DOMAIN" == *.*.* ]]; then
+    SERVER_NAMES="$DOMAIN"
+  else
+    SERVER_NAMES="$DOMAIN www.$DOMAIN"
+  fi
+  echo "==> Adding a NEW Nginx site for ${SERVER_NAMES} (existing sites untouched)"
   sudo tee "/etc/nginx/sites-available/duitku" > /dev/null <<EOF
 server {
     listen 80;
-    server_name ${DOMAIN};
+    server_name ${SERVER_NAMES};
 
     location / {
         proxy_pass http://127.0.0.1:${APP_PORT};
@@ -180,7 +187,7 @@ if [[ -n "$DOMAIN" ]]; then
   echo " Untuk mengaktifkan HTTPS (setelah DNS domain mengarah ke"
   echo " server ini), jalankan:"
   echo "   sudo apt-get install -y certbot python3-certbot-nginx"
-  echo "   sudo certbot --nginx -d ${DOMAIN}"
+  echo "   sudo certbot --nginx $(printf -- '-d %s ' $SERVER_NAMES)"
 else
   echo " Deploy selesai. Aplikasi lain di server ini TIDAK diganggu."
   echo " Duitku tersedia sementara di: http://103.175.207.51:${APP_PORT}"
