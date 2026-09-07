@@ -58,8 +58,10 @@ if [[ $EUID -eq 0 ]]; then
 fi
 
 echo "==> Checking APP_PORT ${APP_PORT} is free"
-if ss -tln 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${APP_PORT}\$"; then
-  echo "ERROR: something is already listening on port ${APP_PORT}." >&2
+if command -v pm2 >/dev/null 2>&1 && pm2 describe duitku >/dev/null 2>&1; then
+  echo "    An existing 'duitku' pm2 process is already using this port — it will be replaced by this run."
+elif ss -tln 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${APP_PORT}\$"; then
+  echo "ERROR: something else is already listening on port ${APP_PORT}." >&2
   echo "Run check-server.sh, pick a free port, and re-run with APP_PORT=<free-port>." >&2
   exit 1
 fi
