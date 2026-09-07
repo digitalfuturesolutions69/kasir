@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 #
-# Deploy script for Duitku on an Ubuntu/Debian VPS that MAY already be
-# running other applications. This script is careful never to touch any
-# existing Nginx site, existing pm2 process, or the system Node.js install
-# if a different major version is already present.
+# Deploy script for Duitku on a shared Ubuntu/Debian VPS that already runs
+# other applications (managed by the `deploy` user + pm2). This script is
+# careful never to touch any existing Nginx site or other pm2 process.
+#
+# Run as the SAME non-root user that manages the other apps (e.g. `deploy`),
+# NOT as root — it uses `sudo` internally only for the handful of steps that
+# genuinely need it (apt-get, writing to /etc/nginx, reloading nginx).
 #
 # Run `check-server.sh` first to see what's already on the server and to
 # pick an APP_PORT that isn't in use yet.
 #
 # Usage:
-#   1. Copy this file (and check-server.sh) to the VPS
+#   1. Copy this file (and check-server.sh) to the VPS, into the deploy
+#      user's home directory
 #   2. Run check-server.sh first, pick a free APP_PORT
-#   3. export GITHUB_TOKEN=... APP_PORT=3001 (and DOMAIN=... if you have one)
-#   4. sudo -E bash deploy.sh
+#   3. export APP_PORT=4001 (and DOMAIN=... once you have one)
+#   4. bash deploy.sh        <- as the `deploy` user, no sudo prefix
 #
 # Safe to re-run: it skips steps that are already done, and never removes
 # anything belonging to another application.
@@ -20,37 +24,36 @@
 set -euo pipefail
 
 # ============================== CONFIG ==============================
-# GitHub repo containing the app.
+# GitHub repo containing the app (public, so no token needed).
 GITHUB_REPO="${GITHUB_REPO:-digitalfuturesolutions69/kasir}"
 
-# If the repo is private, create a GitHub Personal Access Token with
-# read-only "Contents" access and export it before running:
-#   export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
+# Optional: only needed if the repo is ever made private again.
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
-# Where the app will live on the server. Kept separate from any existing
-# app's directory.
-APP_DIR="${APP_DIR:-/opt/duitku}"
+# Where the app will live — defaults to a folder in the current user's
+# home, alongside how other apps on this server are laid out (e.g.
+# /home/deploy/duitku next to /home/deploy/chatbot).
+APP_DIR="${APP_DIR:-$HOME/duitku}"
 
 # Domain name (subdomain) DEDICATED to Duitku, e.g. duitku.example.com.
 # Leave empty to skip Nginx entirely — the app will only be reachable at
 # http://<server-ip>:<APP_PORT> until you have a domain for it.
 #
-# IMPORTANT: because another app already owns this server's default Nginx
-# site, a domain is required before Duitku can be exposed on port 80/443.
-# This script will NEVER touch the existing default site.
+# IMPORTANT: other domains already own this server's Nginx config. This
+# script will NEVER touch any existing site — it only ever adds a new one.
 DOMAIN="${DOMAIN:-}"
 
-# Port the Next.js app listens on. MUST NOT collide with the existing
-# app — run check-server.sh first to confirm this port is free.
-APP_PORT="${APP_PORT:-3001}"
-
-# Node.js major version to install/use for Duitku.
-NODE_MAJOR="${NODE_MAJOR:-22}"
+# Port the Next.js app listens on. MUST NOT collide with an existing app —
+# run check-server.sh first to confirm this port is free. 4001 was checked
+# free on this server as of the last check.
+APP_PORT="${APP_PORT:-4001}"
 # ======================================================================
 
-if [[ $EUID -ne 0 ]]; then
-  echo "Please run as root (sudo -E bash deploy.sh)" >&2
+if [[ $EUID -eq 0 ]]; then
+  echo "Please run this as the 'deploy' user (not root) — it uses sudo" >&2
+  echo "internally only where actually needed, and keeps Duitku under the" >&2
+  echo "same account/pm2 daemon as the other apps on this server." >&2
+  echo "  su - deploy   # then re-run: bash deploy.sh" >&2
   exit 1
 fi
 
@@ -61,36 +64,32 @@ if ss -tln 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${APP_PORT}\$"; then
   exit 1
 fi
 
-echo "==> Updating apt and installing base packages (git, curl — safe on any server)"
-apt-get update -y
-apt-get install -y ca-certificates curl gnupg git
+echo "==> Refreshing sudo credentials (will prompt once if needed)"
+sudo -v
 
-CURRENT_NODE_MAJOR="$(command -v node >/dev/null 2>&1 && node -v | grep -oE '^v[0-9]+' | tr -d v || echo "")"
-if [[ -z "$CURRENT_NODE_MAJOR" ]]; then
-  echo "==> No system Node.js found, installing Node.js ${NODE_MAJOR}.x"
-  curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
-  apt-get install -y nodejs
-elif [[ "$CURRENT_NODE_MAJOR" == "$NODE_MAJOR" ]]; then
-  echo "==> System Node.js v${CURRENT_NODE_MAJOR} already matches, reusing it"
-else
-  echo "==> WARNING: system Node.js is v${CURRENT_NODE_MAJOR}, but Duitku wants v${NODE_MAJOR}."
-  echo "    NOT touching the system Node.js install to avoid breaking the existing app."
-  echo "    Installing Node.js ${NODE_MAJOR}.x separately via nvm for this app only."
-  export NVM_DIR="/opt/duitku-nvm"
-  mkdir -p "$NVM_DIR"
-  if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
-    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | NVM_DIR="$NVM_DIR" bash
-  fi
-  # shellcheck disable=SC1091
-  source "$NVM_DIR/nvm.sh"
-  nvm install "$NODE_MAJOR"
-  nvm alias default "$NODE_MAJOR"
-  export PATH="$NVM_DIR/versions/node/$(nvm version default)/bin:$PATH"
+echo "==> Making sure git/curl are present"
+sudo apt-get update -y
+sudo apt-get install -y ca-certificates curl gnupg git
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "ERROR: no 'node' found on this account's PATH." >&2
+  echo "This server already runs other Node.js apps under this user —" >&2
+  echo "make sure you're logged in as the same user/shell that runs them" >&2
+  echo "(nvm-managed Node.js is often only loaded in an interactive login shell)." >&2
+  exit 1
+fi
+NODE_VERSION="$(node -v)"
+NODE_MAJOR_CURRENT="$(echo "$NODE_VERSION" | grep -oE '^v[0-9]+' | tr -d v)"
+echo "==> Using existing Node.js ${NODE_VERSION}"
+if [[ "$NODE_MAJOR_CURRENT" -lt 20 ]]; then
+  echo "WARNING: Duitku (Next.js 16) wants Node.js >= 20. Build may fail on ${NODE_VERSION}."
 fi
 
 if ! command -v pm2 >/dev/null 2>&1; then
-  echo "==> Installing pm2 (process manager) globally"
+  echo "==> Installing pm2 (process manager) for this user"
   npm install -g pm2
+else
+  echo "==> Reusing existing pm2 ($(pm2 -v)) — Duitku will show up in 'pm2 list' with your other apps"
 fi
 
 echo "==> Fetching application code"
@@ -108,7 +107,7 @@ if [[ -d "$APP_DIR/.git" ]]; then
 else
   git clone "$CLONE_URL" "$APP_DIR"
 fi
-# Never keep the token in the on-disk remote URL.
+# Never keep a token in the on-disk remote URL.
 git -C "$APP_DIR" remote set-url origin "https://github.com/${GITHUB_REPO}.git"
 
 cd "$APP_DIR"
@@ -137,13 +136,10 @@ echo "==> Starting app with pm2 (process name: duitku, port ${APP_PORT})"
 pm2 delete duitku >/dev/null 2>&1 || true
 PORT="$APP_PORT" pm2 start npm --name duitku -- start
 pm2 save
-# pm2 startup only needs to run once per server; harmless to re-run.
-pm2 startup systemd -u root --hp /root >/tmp/pm2-startup.out 2>&1 || true
-grep -E '^sudo ' /tmp/pm2-startup.out | bash || true
 
 if [[ -n "$DOMAIN" ]]; then
   echo "==> Adding a NEW Nginx site for ${DOMAIN} (existing sites untouched)"
-  cat > "/etc/nginx/sites-available/duitku" <<EOF
+  sudo tee "/etc/nginx/sites-available/duitku" > /dev/null <<EOF
 server {
     listen 80;
     server_name ${DOMAIN};
@@ -161,18 +157,18 @@ server {
     }
 }
 EOF
-  ln -sf /etc/nginx/sites-available/duitku /etc/nginx/sites-enabled/duitku
-  nginx -t
-  systemctl reload nginx
+  sudo ln -sf /etc/nginx/sites-available/duitku /etc/nginx/sites-enabled/duitku
+  sudo nginx -t
+  sudo systemctl reload nginx
 
-  if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
-    ufw allow 'Nginx Full' >/dev/null || true
+  if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "Status: active"; then
+    sudo ufw allow 'Nginx Full' >/dev/null || true
   fi
 else
-  echo "==> No DOMAIN set — skipping Nginx entirely (existing app's Nginx config is untouched)"
-  if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
+  echo "==> No DOMAIN set — skipping Nginx entirely (existing sites untouched)"
+  if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "Status: active"; then
     echo "==> Opening firewall for port ${APP_PORT}"
-    ufw allow "${APP_PORT}/tcp" >/dev/null || true
+    sudo ufw allow "${APP_PORT}/tcp" >/dev/null || true
   fi
 fi
 
@@ -183,8 +179,8 @@ if [[ -n "$DOMAIN" ]]; then
   echo ""
   echo " Untuk mengaktifkan HTTPS (setelah DNS domain mengarah ke"
   echo " server ini), jalankan:"
-  echo "   apt-get install -y certbot python3-certbot-nginx"
-  echo "   certbot --nginx -d ${DOMAIN}"
+  echo "   sudo apt-get install -y certbot python3-certbot-nginx"
+  echo "   sudo certbot --nginx -d ${DOMAIN}"
 else
   echo " Deploy selesai. Aplikasi lain di server ini TIDAK diganggu."
   echo " Duitku tersedia sementara di: http://103.175.207.51:${APP_PORT}"
@@ -192,8 +188,8 @@ else
   echo " Setelah Anda punya subdomain khusus untuk Duitku (misalnya"
   echo " duitku.namadomainanda.com) dan sudah diarahkan ke server ini,"
   echo " jalankan ulang:"
-  echo "   export GITHUB_TOKEN=... APP_PORT=${APP_PORT} DOMAIN=duitku.namadomainanda.com"
-  echo "   sudo -E bash deploy.sh"
+  echo "   export APP_PORT=${APP_PORT} DOMAIN=duitku.namadomainanda.com"
+  echo "   bash deploy.sh"
   echo " lalu aktifkan HTTPS dengan certbot."
 fi
 echo "============================================================"

@@ -1,80 +1,75 @@
 # Deploy Duitku ke VPS
 
-Panduan untuk menjalankan Duitku di VPS Ubuntu/Debian (`103.175.207.51`) yang
-**sudah punya aplikasi lain berjalan di sana**. Script di folder ini dibuat
-supaya tidak mengganggu aplikasi yang sudah ada — Duitku dipasang di direktori,
-port, dan (kalau perlu) proses pm2 miliknya sendiri.
+Panduan menjalankan Duitku di VPS (`103.175.207.51`) yang **sudah punya banyak
+aplikasi lain berjalan di sana**, dikelola lewat user `deploy` + pm2. Script di
+folder ini dibuat supaya Duitku dipasang berdampingan tanpa mengganggu
+aplikasi yang sudah ada.
 
-## 0. Cek dulu kondisi server (wajib, sebelum deploy)
-
-Upload dan jalankan `check-server.sh` — ini **read-only**, tidak mengubah
-apa pun, hanya menampilkan info:
+## 0. Cek dulu kondisi server (kalau belum)
 
 ```bash
-scp deploy/check-server.sh root@103.175.207.51:~/
-ssh root@103.175.207.51
-sudo bash check-server.sh
+curl -O https://raw.githubusercontent.com/digitalfuturesolutions69/kasir/main/deploy/check-server.sh
+bash check-server.sh
 ```
 
-Perhatikan bagian **"Ports currently listening"** — catat port mana yang
-sudah dipakai aplikasi lain, lalu pilih port lain yang masih kosong untuk
-Duitku (default script: `3001`, ganti kalau ternyata sudah dipakai).
-
-## 1. Siapkan token GitHub (karena repo ini private)
-
-1. Buka https://github.com/settings/tokens?type=beta
-2. **Generate new token** → beri nama bebas (mis. "duitku-deploy")
-3. **Repository access** → pilih **Only select repositories** → pilih `kasir`
-4. **Permissions** → **Repository permissions** → **Contents** → **Read-only**
-5. Generate, lalu salin tokennya (hanya tampil sekali)
-
-## 2. Upload deploy.sh ke VPS
-
-Dari komputer Anda:
+Port `4001` sudah dicek kosong di server ini — kalau ternyata terpakai lain
+waktu, cek ulang dengan:
 
 ```bash
-scp deploy/deploy.sh root@103.175.207.51:~/
+sudo ss -tlnp | grep ':4001'
 ```
 
-## 3. Jalankan di VPS
+## 1. Login sebagai user `deploy` (bukan root)
+
+Karena semua aplikasi lain di server ini dijalankan lewat pm2 milik user
+`deploy`, Duitku juga dijalankan dengan cara yang sama supaya konsisten dan
+muncul bareng di `pm2 list`.
 
 ```bash
-ssh root@103.175.207.51
-export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
-export APP_PORT=3001   # sesuaikan dari hasil check-server.sh
-sudo -E bash deploy.sh
+ssh deploy@103.175.207.51
+# atau, kalau sedang login sebagai root:
+su - deploy
 ```
 
-Karena belum ada domain khusus untuk Duitku, dan port 80 di server ini sudah
-dipakai aplikasi lain, langkah di atas **tidak menyentuh Nginx sama sekali**.
-Duitku akan bisa diakses langsung di:
+## 2. Download & jalankan deploy.sh
 
-```
-http://103.175.207.51:3001
-```
-
-(ganti `3001` sesuai `APP_PORT` yang Anda pakai)
-
-## 4. Kalau nanti sudah punya (sub)domain khusus untuk Duitku
-
-Karena port 80 sudah "dimiliki" aplikasi lain, Duitku butuh domain/subdomain
-sendiri (bukan akses lewat IP polos) supaya Nginx bisa membedakan berdasarkan
-nama domain — misalnya `duitku.namadomainanda.com`. Arahkan A record subdomain
-itu ke `103.175.207.51`, lalu jalankan ulang:
+Repo `kasir` sudah **public**, jadi tidak perlu token GitHub lagi:
 
 ```bash
-export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
-export APP_PORT=3001
+curl -O https://raw.githubusercontent.com/digitalfuturesolutions69/kasir/main/deploy/deploy.sh
+export APP_PORT=4001
+bash deploy.sh
+```
+
+Script akan minta password sudo **sekali** di awal (untuk install
+git/curl dan, kalau nanti diisi `DOMAIN`, untuk konfigurasi Nginx) — bagian
+lain (clone kode, install dependency, build, jalankan pm2) berjalan sebagai
+user `deploy` biasa, sama seperti aplikasi lain di server ini.
+
+Setelah selesai, Duitku bisa diakses di:
+
+```
+http://103.175.207.51:4001
+```
+
+## 3. Kalau nanti sudah punya (sub)domain khusus untuk Duitku
+
+Karena domain-domain lain sudah "memiliki" port 80 di Nginx, Duitku butuh
+subdomain sendiri — misalnya `duitku.namadomainanda.com` — supaya Nginx bisa
+membedakan berdasarkan nama domain. Arahkan A record subdomain itu ke
+`103.175.207.51`, lalu jalankan ulang (masih sebagai user `deploy`):
+
+```bash
+export APP_PORT=4001
 export DOMAIN=duitku.namadomainanda.com
-sudo -E bash deploy.sh
+bash deploy.sh
 ```
 
-Script akan menambahkan **site Nginx baru** khusus untuk domain tersebut
-(`/etc/nginx/sites-available/duitku`) tanpa mengubah/menghapus site yang
-sudah ada untuk aplikasi lain.
+Script menambahkan **site Nginx baru** (`/etc/nginx/sites-available/duitku`)
+tanpa mengubah/menghapus site domain lain yang sudah ada.
 
 Setelah itu aktifkan HTTPS gratis (Let's Encrypt) — ini juga hanya menyentuh
-domain Duitku, bukan domain aplikasi lain:
+domain Duitku:
 
 ```bash
 sudo apt-get install -y certbot python3-certbot-nginx
@@ -84,22 +79,22 @@ sudo certbot --nginx -d duitku.namadomainanda.com
 ## Yang dilakukan script ini (dan yang TIDAK dilakukan)
 
 Dilakukan:
+- Jalan sebagai user `deploy`, konsisten dengan aplikasi lain di server ini
 - Cek dulu apakah `APP_PORT` sudah dipakai — berhenti dengan pesan error kalau bentrok
-- Kalau Node.js versi berbeda sudah terpasang secara global, **tidak** menimpanya —
-  Duitku akan pakai Node.js sendiri lewat nvm supaya tidak mengganggu aplikasi lain
-- Clone/pull kode ke direktori terpisah `/opt/duitku`
+- Pakai Node.js & pm2 yang sudah ada di akun `deploy` (tidak install ulang kalau sudah ada)
+- Clone/pull kode ke `~/duitku` (folder terpisah dari app lain)
 - Buat `.env` otomatis dengan `JWT_SECRET` acak (kalau belum ada)
 - Install dependencies, migrasi database (Prisma + SQLite), build produksi
-- Jalankan aplikasi lewat pm2 dengan nama proses `duitku` (proses pm2 aplikasi
-  lain, kalau ada, tidak disentuh)
+- Jalankan aplikasi lewat pm2 dengan nama proses `duitku` — proses pm2 aplikasi
+  lain tidak disentuh sama sekali
 - Nginx **hanya** disentuh kalau `DOMAIN` diisi, dan hanya menambah site baru —
-  tidak pernah menghapus/mengubah `sites-enabled/default` atau site lain
+  tidak pernah menghapus/mengubah site domain lain
 
 ## Update aplikasi di kemudian hari
 
-Jalankan ulang perintah yang sama di langkah 3 (atau 4 kalau sudah pakai
-domain) — script otomatis `git pull`, install ulang dependency, migrasi,
-build, dan restart aplikasi.
+Login sebagai `deploy`, lalu jalankan ulang perintah yang sama di langkah 2
+(atau 3 kalau sudah pakai domain) — script otomatis `git pull`, install ulang
+dependency, migrasi, build, dan restart aplikasi.
 
 ## Perintah berguna di VPS
 
