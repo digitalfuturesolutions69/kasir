@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
-import { X, Camera, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { X, Camera, Image as ImageIcon, Loader2, Sparkles, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import {
   createTransactionAction,
@@ -57,7 +57,8 @@ export function TransactionModal({
   );
   const [uploading, setUploading] = useState(false);
   const [uploadNote, setUploadNote] = useState<{ text: string; kind: "info" | "error" } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -121,7 +122,8 @@ export function TransactionModal({
       setUploadNote({ text: "Gagal mengunggah foto. Coba lagi.", kind: "error" });
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
+      if (galleryInputRef.current) galleryInputRef.current.value = "";
     }
   }
 
@@ -156,7 +158,15 @@ export function TransactionModal({
           <div>
             <Label>Foto Bukti Transaksi (opsional)</Label>
             <input
-              ref={fileInputRef}
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <input
+              ref={galleryInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp"
               className="hidden"
@@ -192,13 +202,20 @@ export function TransactionModal({
                   ) : (
                     <p className="text-sm font-medium text-slate-600">Foto tersimpan</p>
                   )}
-                  <div className="mt-1 flex gap-3">
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => cameraInputRef.current?.click()}
                       className="cursor-pointer text-xs font-medium text-indigo-600 hover:text-indigo-700"
                     >
-                      Ganti foto
+                      Ambil ulang
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => galleryInputRef.current?.click()}
+                      className="cursor-pointer text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                    >
+                      Pilih file lain
                     </button>
                     <button
                       type="button"
@@ -212,15 +229,27 @@ export function TransactionModal({
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-200 py-6 text-slate-400 transition-colors hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600"
-              >
-                <Camera className="h-6 w-6" />
-                <span className="text-sm font-medium">Unggah foto struk / bukti transfer</span>
-                <span className="text-xs">Jumlah, jenis &amp; kategori terisi otomatis</span>
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed border-slate-200 py-5 text-slate-400 transition-colors hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600"
+                >
+                  <Camera className="h-5 w-5" />
+                  <span className="text-sm font-medium">Ambil Foto</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed border-slate-200 py-5 text-slate-400 transition-colors hover:border-indigo-300 hover:bg-indigo-50/50 hover:text-indigo-600"
+                >
+                  <ImageIcon className="h-5 w-5" />
+                  <span className="text-sm font-medium">Pilih dari Galeri</span>
+                </button>
+                <p className="col-span-2 mt-0.5 text-center text-xs text-slate-400">
+                  Jumlah, jenis &amp; kategori terisi otomatis
+                </p>
+              </div>
             )}
           </div>
 
