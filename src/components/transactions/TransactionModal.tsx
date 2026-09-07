@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
-import { X, Camera, Image as ImageIcon, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { X, Camera, Image as ImageIcon, Loader2, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import clsx from "clsx";
 import {
   createTransactionAction,
@@ -56,7 +56,9 @@ export function TransactionModal({
     editing?.receiptPath ? `/api/receipts/${editing.receiptPath}` : null
   );
   const [uploading, setUploading] = useState(false);
-  const [uploadNote, setUploadNote] = useState<{ text: string; kind: "info" | "error" } | null>(null);
+  const [uploadNote, setUploadNote] = useState<
+    { text: string; kind: "info" | "error"; showReload?: boolean } | null
+  >(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -138,7 +140,15 @@ export function TransactionModal({
         setUploadNote({ text: result.error, kind: "error" });
       }
     } catch {
-      setUploadNote({ text: "Gagal mengunggah foto. Coba lagi.", kind: "error" });
+      // Most commonly hit right after a new deploy: the browser is still
+      // running JS from the previous build, which references server
+      // actions that no longer exist on the (now-updated) server. A
+      // normal retry can't fix this — only a real page reload can.
+      setUploadNote({
+        text: "Gagal mengunggah foto. Ini sering terjadi setelah aplikasi baru saja diperbarui — muat ulang halaman ini, lalu coba lagi.",
+        kind: "error",
+        showReload: true,
+      });
     } finally {
       setUploading(false);
       if (cameraInputRef.current) cameraInputRef.current.value = "";
@@ -209,15 +219,27 @@ export function TransactionModal({
                       Membaca bukti transaksi...
                     </p>
                   ) : uploadNote ? (
-                    <p
-                      className={clsx(
-                        "flex items-center gap-1.5 text-sm font-medium",
-                        uploadNote.kind === "error" ? "text-amber-600" : "text-emerald-600"
+                    <>
+                      <p
+                        className={clsx(
+                          "flex items-center gap-1.5 text-sm font-medium",
+                          uploadNote.kind === "error" ? "text-amber-600" : "text-emerald-600"
+                        )}
+                      >
+                        <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                        {uploadNote.text}
+                      </p>
+                      {uploadNote.showReload && (
+                        <button
+                          type="button"
+                          onClick={() => window.location.reload()}
+                          className="mt-1.5 flex cursor-pointer items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Muat Ulang Halaman
+                        </button>
                       )}
-                    >
-                      <Sparkles className="h-3.5 w-3.5" />
-                      {uploadNote.text}
-                    </p>
+                    </>
                   ) : (
                     <p className="text-sm font-medium text-slate-600">Foto tersimpan</p>
                   )}
