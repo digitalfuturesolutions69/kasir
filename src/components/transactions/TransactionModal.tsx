@@ -50,6 +50,7 @@ export function TransactionModal({
   const [type, setType] = useState<"INCOME" | "EXPENSE">(editing?.type ?? defaultType);
   const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
   const [description, setDescription] = useState(editing?.description ?? "");
+  const [categoryId, setCategoryId] = useState(editing?.categoryId ?? "");
   const [receiptPath, setReceiptPath] = useState<string | null>(editing?.receiptPath ?? null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(
     editing?.receiptPath ? `/api/receipts/${editing.receiptPath}` : null
@@ -63,6 +64,7 @@ export function TransactionModal({
       setType(editing?.type ?? defaultType);
       setAmount(editing ? String(editing.amount) : "");
       setDescription(editing?.description ?? "");
+      setCategoryId(editing?.categoryId ?? "");
       setReceiptPath(editing?.receiptPath ?? null);
       setPreviewUrl(editing?.receiptPath ? `/api/receipts/${editing.receiptPath}` : null);
       setUploadNote(null);
@@ -80,6 +82,13 @@ export function TransactionModal({
     () => categories.filter((c) => c.type === type),
     [categories, type]
   );
+
+  function handleTypeChange(t: "INCOME" | "EXPENSE") {
+    setType(t);
+    if (!categories.some((c) => c.id === categoryId && c.type === t)) {
+      setCategoryId("");
+    }
+  }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -100,6 +109,7 @@ export function TransactionModal({
         setType(result.extracted.type);
         setAmount(String(result.extracted.amount));
         if (result.extracted.description) setDescription(result.extracted.description);
+        setCategoryId(result.extracted.categoryId ?? "");
         setUploadNote({
           text: CONFIDENCE_LABEL[result.extracted.confidence] ?? "Terisi otomatis dari foto",
           kind: result.extracted.confidence === "low" ? "error" : "info",
@@ -209,7 +219,7 @@ export function TransactionModal({
               >
                 <Camera className="h-6 w-6" />
                 <span className="text-sm font-medium">Unggah foto struk / bukti transfer</span>
-                <span className="text-xs">Jumlah &amp; jenis transaksi terisi otomatis</span>
+                <span className="text-xs">Jumlah, jenis &amp; kategori terisi otomatis</span>
               </button>
             )}
           </div>
@@ -232,7 +242,7 @@ export function TransactionModal({
                   name="type"
                   value={t}
                   checked={type === t}
-                  onChange={() => setType(t)}
+                  onChange={() => handleTypeChange(t)}
                   className="sr-only"
                 />
                 {t === "INCOME" ? "Pemasukan" : "Pengeluaran"}
@@ -271,7 +281,12 @@ export function TransactionModal({
             </div>
             <div>
               <Label htmlFor="categoryId">Kategori</Label>
-              <Select id="categoryId" name="categoryId" defaultValue={editing?.categoryId ?? ""}>
+              <Select
+                id="categoryId"
+                name="categoryId"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+              >
                 <option value="">Tanpa kategori</option>
                 {filteredCategories.map((c) => (
                   <option key={c.id} value={c.id}>
