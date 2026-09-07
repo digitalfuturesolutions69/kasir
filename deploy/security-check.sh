@@ -10,6 +10,14 @@
 
 set -uo pipefail
 
+# Run under sudo, $HOME becomes /root — resolve the actual deploy user's
+# home so the ~/duitku lookups below (and pm2, in their user profile)
+# still work.
+DEPLOY_HOME="$HOME"
+if [[ -n "${SUDO_USER:-}" ]]; then
+  DEPLOY_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+fi
+
 echo "=== OS & pending security updates ==="
 if [[ -f /etc/os-release ]]; then
   grep -E '^(NAME|VERSION)=' /etc/os-release
@@ -29,15 +37,16 @@ else
 fi
 echo ""
 
-echo "=== SSH hardening (/etc/ssh/sshd_config) ==="
-if [[ -r /etc/ssh/sshd_config ]]; then
-  grep -E '^\s*(PermitRootLogin|PasswordAuthentication|PubkeyAuthentication)\b' /etc/ssh/sshd_config 2>/dev/null \
-    || echo "(none of these explicitly set — check sshd_config.d/*.conf too)"
-  echo "--- sshd_config.d/*.conf overrides (if any) ---"
-  grep -H -E '^\s*(PermitRootLogin|PasswordAuthentication|PubkeyAuthentication)\b' /etc/ssh/sshd_config.d/*.conf 2>/dev/null || echo "(none)"
+echo "=== SSH hardening — EFFECTIVE config (wins over any file precedence guessing) ==="
+if command -v sshd >/dev/null 2>&1; then
+  sudo sshd -T 2>/dev/null | grep -iE '^(permitrootlogin|passwordauthentication|pubkeyauthentication)\b' \
+    || echo "Could not run 'sshd -T' (needs sudo)"
 else
-  echo "Cannot read /etc/ssh/sshd_config (run with sudo)"
+  echo "sshd not found on PATH"
 fi
+echo "--- raw files, for reference only (sshd -T above is what actually applies) ---"
+grep -H -E '^\s*(PermitRootLogin|PasswordAuthentication|PubkeyAuthentication)\b' /etc/ssh/sshd_config 2>/dev/null
+grep -H -E '^\s*(PermitRootLogin|PasswordAuthentication|PubkeyAuthentication)\b' /etc/ssh/sshd_config.d/*.conf 2>/dev/null
 echo ""
 
 echo "=== fail2ban (SSH/login brute-force protection) ==="
@@ -91,16 +100,21 @@ fi
 echo ""
 
 echo "=== File permissions: Duitku secrets & database ==="
-if [[ -f "$HOME/duitku/.env" ]]; then
-  ls -la "$HOME/duitku/.env"
+if [[ -f "$DEPLOY_HOME/duitku/.env" ]]; then
+  ls -la "$DEPLOY_HOME/duitku/.env"
 else
-  echo "$HOME/duitku/.env not found (wrong user/path?)"
+  echo "$DEPLOY_HOME/duitku/.env not found (wrong user/path?)"
 fi
-find "$HOME/duitku/prisma" -iname "*.db" -exec ls -la {} \; 2>/dev/null
+find "$DEPLOY_HOME/duitku/prisma" -iname "*.db" -exec ls -la {} \; 2>/dev/null
 echo ""
 
 echo "=== Duitku pm2 process health ==="
-if command -v pm2 >/dev/null 2>&1; then
+if [[ -n "${SUDO_USER:-}" ]]; then
+  # pm2 lives in the deploy user's own npm global path, invisible to
+  # root's PATH under sudo — run the check as that user instead.
+  sudo -u "$SUDO_USER" bash -lc 'pm2 describe duitku 2>/dev/null | grep -E "status|restarts|uptime|memory" || pm2 list' 2>/dev/null \
+    || echo "Could not run pm2 as $SUDO_USER — try: pm2 describe duitku (without sudo)"
+elif command -v pm2 >/dev/null 2>&1; then
   pm2 describe duitku 2>/dev/null | grep -E "status|restarts|uptime|memory" || pm2 list
 else
   echo "pm2: not installed"

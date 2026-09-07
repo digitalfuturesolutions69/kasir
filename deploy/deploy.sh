@@ -225,6 +225,14 @@ EOF
 
   if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "Status: active"; then
     sudo ufw allow 'Nginx Full' >/dev/null || true
+    # Once a domain (and, via certbot, HTTPS) is serving traffic through
+    # Nginx, direct access to APP_PORT is never legitimate — it lets
+    # anyone bypass HTTPS and hit the app over plain HTTP. This is a
+    # firewall-level close only (Nginx keeps working: proxy_pass to
+    # 127.0.0.1 is loopback traffic, unaffected by ufw's incoming
+    # rules) — safe to run even if the port was never opened.
+    echo "==> Closing direct external access to APP_PORT ${APP_PORT} (now served only via Nginx)"
+    sudo ufw delete allow "${APP_PORT}/tcp" >/dev/null 2>&1 || true
   fi
 else
   echo "==> No DOMAIN set — skipping Nginx entirely (existing sites untouched)"
