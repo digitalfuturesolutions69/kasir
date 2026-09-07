@@ -11,6 +11,7 @@ import {
   BarChart3,
   Check,
   Sparkles,
+  ScanLine,
 } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
@@ -174,9 +175,9 @@ function LogoStrip() {
 
 const features = [
   {
-    icon: Zap,
-    title: "Input Super Cepat",
-    desc: "Catat transaksi pemasukan atau pengeluaran hanya dalam beberapa detik dengan form yang simpel.",
+    icon: ScanLine,
+    title: "Scan Struk dengan AI",
+    desc: "Foto struk belanja atau bukti transfer, dan AI otomatis mengisi jumlah, jenis transaksi, hingga kategorinya — tak perlu ketik manual.",
   },
   {
     icon: PieChart,
