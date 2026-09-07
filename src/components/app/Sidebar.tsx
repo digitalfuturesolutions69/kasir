@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { Wallet, LogOut } from "lucide-react";
+import { Wallet, LogOut, ShieldCheck } from "lucide-react";
 import { NAV_ITEMS } from "./nav-items";
 import { logoutAction } from "@/lib/actions/auth";
 
-export function Sidebar({ userName }: { userName: string }) {
+export function Sidebar({ userName, isAdmin }: { userName: string; isAdmin?: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -39,6 +39,23 @@ export function Sidebar({ userName }: { userName: string }) {
           );
         })}
       </nav>
+
+      {isAdmin && (
+        <div className="px-3 pb-3">
+          <Link
+            href="/admin"
+            className={clsx(
+              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+              pathname.startsWith("/admin")
+                ? "bg-violet-50 text-violet-700"
+                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+            )}
+          >
+            <ShieldCheck className="h-4 w-4" />
+            Dashboard Admin
+          </Link>
+        </div>
+      )}
 
       <div className="border-t border-slate-100 p-4">
         <div className="mb-3 flex items-center gap-3 rounded-xl px-2 py-2">
