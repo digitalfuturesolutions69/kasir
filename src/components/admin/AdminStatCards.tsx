@@ -1,4 +1,4 @@
-import { Users, Receipt, Wallet, UserPlus } from "lucide-react";
+import { Users, Receipt, Wallet, UserPlus, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 
 export function AdminStatCards({
@@ -6,11 +6,13 @@ export function AdminStatCards({
   newUsers7d,
   totalTransactions,
   totalVolume,
+  mrr,
 }: {
   totalUsers: number;
   newUsers7d: number;
   totalTransactions: number;
   totalVolume: number;
+  mrr: number;
 }) {
   const cards = [
     {
@@ -37,10 +39,16 @@ export function AdminStatCards({
       icon: Wallet,
       color: "text-violet-600 bg-violet-50",
     },
+    {
+      label: "Estimasi MRR",
+      value: formatCurrency(mrr),
+      icon: TrendingUp,
+      color: "text-rose-600 bg-rose-50",
+    },
   ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
       {cards.map((c) => (
         <div key={c.label} className="rounded-2xl border border-slate-200 bg-white p-5">
           <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${c.color}`}>

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { Plan } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { isAdminEmail } from "@/lib/admin";
 import { PLAN_ORDER } from "@/lib/plans";
 
 export type ChangePlanState = { error?: string; success?: boolean };
@@ -32,4 +33,20 @@ export async function changePlanAction(
 
   revalidatePath("/paket");
   return { success: true };
+}
+
+// Lets an admin set any user's plan directly (support/testing — e.g.
+// granting a promo, or fixing a stuck account). Gated the same way the
+// rest of /admin is: by ADMIN_EMAIL, not a DB role.
+export async function adminChangePlanAction(userId: string, plan: Plan) {
+  const session = await getSession();
+  if (!session || !isAdminEmail(session.email)) {
+    throw new Error("Unauthorized");
+  }
+  if (!PLAN_ORDER.includes(plan)) {
+    throw new Error("Paket tidak valid");
+  }
+
+  await prisma.user.update({ where: { id: userId }, data: { plan } });
+  revalidatePath("/admin");
 }
