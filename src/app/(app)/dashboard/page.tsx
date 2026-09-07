@@ -6,6 +6,8 @@ import { OverviewChart, type MonthlyPoint } from "@/components/dashboard/Overvie
 import { CategoryBreakdown, type CategorySlice } from "@/components/dashboard/CategoryBreakdown";
 import { RecentTransactions } from "@/components/dashboard/RecentTransactions";
 import { QuickAddButton } from "@/components/dashboard/QuickAddButton";
+import { ScanQuotaCard } from "@/components/dashboard/ScanQuotaCard";
+import { PLANS, isSamePeriod } from "@/lib/plans";
 
 const MONTH_LABELS = [
   "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
@@ -26,7 +28,7 @@ export default async function DashboardPage() {
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const startOfRange = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
-  const [allTimeTotals, rangeTransactions, recentTransactions, categories] = await Promise.all([
+  const [allTimeTotals, rangeTransactions, recentTransactions, categories, user] = await Promise.all([
     prisma.transaction.groupBy({
       by: ["type"],
       where: { userId },
@@ -48,7 +50,13 @@ export default async function DashboardPage() {
       include: { _count: { select: { transactions: true } } },
       orderBy: { name: "asc" },
     }),
+    prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { plan: true, scanCount: true, scanPeriodStart: true },
+    }),
   ]);
+
+  const scansUsed = isSamePeriod(user.scanPeriodStart, now) ? user.scanCount : 0;
 
   const totalIncome = allTimeTotals.find((t) => t.type === "INCOME")?._sum.amount ?? 0;
   const totalExpense = allTimeTotals.find((t) => t.type === "EXPENSE")?._sum.amount ?? 0;
@@ -127,7 +135,10 @@ export default async function DashboardPage() {
           <div className="lg:col-span-2">
             <OverviewChart data={monthlyData} />
           </div>
-          <CategoryBreakdown items={categoryBreakdown} />
+          <div className="space-y-5">
+            <CategoryBreakdown items={categoryBreakdown} />
+            <ScanQuotaCard plan={user.plan} scansUsed={scansUsed} scanLimit={PLANS[user.plan].scanLimit} />
+          </div>
         </div>
 
         <RecentTransactions
