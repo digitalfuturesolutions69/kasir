@@ -11,6 +11,7 @@ const transactionSchema = z.object({
   description: z.string().trim().max(200).optional().or(z.literal("")),
   date: z.string().min(1, "Tanggal wajib diisi"),
   categoryId: z.string().optional().or(z.literal("")),
+  receiptPath: z.string().optional().or(z.literal("")),
 });
 
 export type TransactionFormState = {
@@ -41,13 +42,14 @@ export async function createTransactionAction(
     description: formData.get("description"),
     date: formData.get("date"),
     categoryId: formData.get("categoryId"),
+    receiptPath: formData.get("receiptPath"),
   });
 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Data tidak valid" };
   }
 
-  const { categoryId, description, ...rest } = parsed.data;
+  const { categoryId, description, receiptPath, ...rest } = parsed.data;
 
   if (categoryId) {
     const category = await prisma.category.findFirst({
@@ -65,6 +67,7 @@ export async function createTransactionAction(
       date: new Date(rest.date),
       userId,
       categoryId: categoryId || null,
+      receiptPath: receiptPath || null,
     },
   });
 
@@ -88,6 +91,7 @@ export async function updateTransactionAction(
     description: formData.get("description"),
     date: formData.get("date"),
     categoryId: formData.get("categoryId"),
+    receiptPath: formData.get("receiptPath"),
   });
 
   if (!parsed.success) {
@@ -99,7 +103,7 @@ export async function updateTransactionAction(
     return { error: "Transaksi tidak ditemukan" };
   }
 
-  const { categoryId, description, ...rest } = parsed.data;
+  const { categoryId, description, receiptPath, ...rest } = parsed.data;
 
   if (categoryId) {
     const category = await prisma.category.findFirst({
@@ -117,6 +121,7 @@ export async function updateTransactionAction(
       description: description || null,
       date: new Date(rest.date),
       categoryId: categoryId || null,
+      receiptPath: receiptPath || null,
     },
   });
 

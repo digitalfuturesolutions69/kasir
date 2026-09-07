@@ -54,5 +54,7 @@ model Transaction {
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
+  receiptPath String?
+
   @@index([userId, date])
 }

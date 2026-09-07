@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Plus, Pencil, Trash2, Search, ArrowDownLeft, ArrowUpRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, ArrowDownLeft, ArrowUpRight, Receipt } from "lucide-react";
 import clsx from "clsx";
 import { CategoryIcon } from "@/lib/icons";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -18,6 +18,7 @@ export type TransactionItem = {
   description: string | null;
   date: string;
   category: { id: string; name: string; color: string; icon: string } | null;
+  receiptPath: string | null;
 };
 
 type TypeFilter = "ALL" | "INCOME" | "EXPENSE";
@@ -86,6 +87,7 @@ export function TransactionsManager({
       description: t.description,
       date: t.date,
       categoryId: t.category?.id ?? null,
+      receiptPath: t.receiptPath,
     });
     setModalOpen(true);
   }
@@ -191,8 +193,22 @@ export function TransactionsManager({
                       )}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-slate-800">
-                        {t.category?.name ?? (t.type === "INCOME" ? "Pemasukan" : "Pengeluaran")}
+                      <p className="flex items-center gap-1.5 truncate text-sm font-medium text-slate-800">
+                        <span className="truncate">
+                          {t.category?.name ?? (t.type === "INCOME" ? "Pemasukan" : "Pengeluaran")}
+                        </span>
+                        {t.receiptPath && (
+                          <a
+                            href={`/api/receipts/${t.receiptPath}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Lihat foto bukti"
+                            onClick={(e) => e.stopPropagation()}
+                            className="shrink-0 text-slate-300 hover:text-indigo-500"
+                          >
+                            <Receipt className="h-3.5 w-3.5" />
+                          </a>
+                        )}
                       </p>
                       {t.description && (
                         <p className="truncate text-xs text-slate-400">{t.description}</p>
