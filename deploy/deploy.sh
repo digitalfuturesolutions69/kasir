@@ -11,12 +11,17 @@
 # Run `check-server.sh` first to see what's already on the server and to
 # pick an APP_PORT that isn't in use yet.
 #
-# Usage:
+# Usage (Duitku is already live on this server at https://duitku.click,
+# port 5001 — just re-run this to deploy the latest commit):
 #   1. Copy this file (and check-server.sh) to the VPS, into the deploy
 #      user's home directory
-#   2. Run check-server.sh first, pick a free APP_PORT
-#   3. export APP_PORT=4001 (and DOMAIN=... once you have one)
-#   4. bash deploy.sh        <- as the `deploy` user, no sudo prefix
+#   2. export APP_PORT=5001 DOMAIN=duitku.click
+#   3. bash deploy.sh        <- as the `deploy` user, no sudo prefix
+#
+# Only if 5001 ever stops being free (collision with a new app on this
+# shared server): run check-server.sh, pick a different free port, and
+# export APP_PORT=<that port> instead — but then update the Nginx site's
+# proxy_pass target manually too, since it won't self-heal.
 #
 # Safe to re-run: it skips steps that are already done, and never removes
 # anything belonging to another application.
@@ -43,10 +48,12 @@ APP_DIR="${APP_DIR:-$HOME/duitku}"
 # script will NEVER touch any existing site — it only ever adds a new one.
 DOMAIN="${DOMAIN:-}"
 
-# Port the Next.js app listens on. MUST NOT collide with an existing app —
-# run check-server.sh first to confirm this port is free. 4001 was checked
-# free on this server as of the last check.
-APP_PORT="${APP_PORT:-4001}"
+# Port the Next.js app listens on. 5001 is where Duitku is actually
+# running in production (duitku.click) — 4001 was the original pick but
+# turned out to already be used by another app on this shared server, so
+# deploys moved to 5001 instead. Only change this if 5001 itself later
+# collides with something new (check with check-server.sh first).
+APP_PORT="${APP_PORT:-5001}"
 # ======================================================================
 
 if [[ $EUID -eq 0 ]]; then
