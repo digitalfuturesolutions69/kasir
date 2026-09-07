@@ -145,12 +145,18 @@ fi
 cd "$APP_DIR"
 
 if [[ ! -f .env ]]; then
-  echo "==> Creating .env with a generated JWT secret"
-  JWT_SECRET="$(openssl rand -hex 32)"
-  cat > .env <<EOF
-DATABASE_URL="file:./prisma/prod.db"
-JWT_SECRET="${JWT_SECRET}"
-EOF
+  # Duitku runs on Postgres now (see deploy/POSTGRES_CUTOVER.md) — unlike
+  # SQLite, that needs a real database + role to already exist somewhere,
+  # which this script has no way to provision safely on its own. Stop
+  # with a template rather than writing a DATABASE_URL that's guaranteed
+  # to fail confusingly at `prisma migrate deploy` a few steps down.
+  echo "ERROR: .env not found. Create it first — Duitku needs Postgres:" >&2
+  echo "" >&2
+  echo "  DATABASE_URL=\"postgresql://USER:PASSWORD@127.0.0.1:5433/duitku\"" >&2
+  echo "  JWT_SECRET=\"$(openssl rand -hex 32)\"" >&2
+  echo "" >&2
+  echo "See deploy/POSTGRES_CUTOVER.md for creating the database/role." >&2
+  exit 1
 else
   echo "==> .env already exists, leaving it untouched"
 fi

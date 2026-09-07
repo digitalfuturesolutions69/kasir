@@ -37,11 +37,15 @@ yarn-error.log*
 # vercel
 .vercel
 
-# prisma
+# prisma — leftover from the SQLite era (pre-Postgres migration), kept in
+# case anything local still touches a .db file
 /prisma/dev.db
 /prisma/dev.db-journal
 /prisma/*.db
 /prisma/*.db-journal
+/prisma/*.db-wal
+/prisma/*.db-shm
+/prisma/migrations-sqlite-archive/
 
 # typescript
 *.tsbuildinfo
