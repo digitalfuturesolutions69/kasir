@@ -112,6 +112,29 @@ fi
 # Never keep a token in the on-disk remote URL.
 git -C "$APP_DIR" remote set-url origin "https://github.com/${GITHUB_REPO}.git"
 
+# This script (and check-server.sh) live outside the git-tracked app
+# directory, so the git pull above does NOT update them — without this,
+# re-running `bash ~/deploy.sh` next time would silently use a stale copy
+# even after fixes land in the repo. Self-update via atomic rename (mv on
+# the same filesystem) so it's safe even though this script is currently
+# mid-execution: the running process keeps reading its already-open file
+# handle, unaffected by the directory entry now pointing elsewhere.
+SELF_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+if [[ -f "$APP_DIR/deploy/deploy.sh" ]] && ! cmp -s "$APP_DIR/deploy/deploy.sh" "$SELF_PATH" 2>/dev/null; then
+  echo "==> Updating $(basename "$SELF_PATH") to the latest version from the repo"
+  cp "$APP_DIR/deploy/deploy.sh" "${SELF_PATH}.new"
+  chmod +x "${SELF_PATH}.new"
+  mv "${SELF_PATH}.new" "$SELF_PATH"
+fi
+if [[ -f "$APP_DIR/deploy/check-server.sh" ]]; then
+  CHECK_SERVER_PATH="$(dirname "$SELF_PATH")/check-server.sh"
+  if ! cmp -s "$APP_DIR/deploy/check-server.sh" "$CHECK_SERVER_PATH" 2>/dev/null; then
+    cp "$APP_DIR/deploy/check-server.sh" "${CHECK_SERVER_PATH}.new"
+    chmod +x "${CHECK_SERVER_PATH}.new"
+    mv "${CHECK_SERVER_PATH}.new" "$CHECK_SERVER_PATH"
+  fi
+fi
+
 cd "$APP_DIR"
 
 if [[ ! -f .env ]]; then
