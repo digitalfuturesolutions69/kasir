@@ -12,12 +12,25 @@ enum TransactionType {
   EXPENSE
 }
 
+enum Plan {
+  FREE
+  PRO
+  UMKM
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
   email        String   @unique
   passwordHash String
   createdAt    DateTime @default(now())
+
+  plan            Plan     @default(FREE)
+  // AI receipt-scan usage for the current monthly period, reset lazily
+  // (see receipts.ts) whenever scanPeriodStart falls in an earlier
+  // calendar month than "now" — no cron job needed.
+  scanCount       Int      @default(0)
+  scanPeriodStart DateTime @default(now())
 
   categories   Category[]
   transactions Transaction[]

@@ -10,6 +10,7 @@ import {
   MAX_RECEIPT_SIZE_BYTES,
   saveReceiptImage,
 } from "@/lib/receipt-storage";
+import { PLANS, isSamePeriod } from "@/lib/plans";
 
 export type ExtractedReceipt = {
   type: "INCOME" | "EXPENSE";
@@ -101,6 +102,14 @@ export async function analyzeReceiptAction(
     return { error: "Gagal menyimpan foto. Coba lagi." };
   }
 
+  const quota = await consumeScanQuota(session.userId);
+  if (!quota.ok) {
+    return {
+      receiptPath,
+      error: `Kuota scan AI paket ${quota.planName} (${quota.limit}/bulan) sudah habis. Foto tersimpan, isi manual di bawah atau upgrade paket di menu Paket.`,
+    };
+  }
+
   const categories = await prisma.category.findMany({
     where: { userId: session.userId },
     select: { id: true, name: true, type: true },
@@ -157,6 +166,42 @@ export async function analyzeReceiptAction(
     console.error("analyzeReceiptAction: Claude call failed", err);
     return { receiptPath, error: receiptErrorMessage(err) };
   }
+}
+
+/**
+ * Atomically checks and consumes one unit of the user's monthly AI
+ * scan quota, rolling the period over first if it has crossed into a
+ * new calendar month. Runs before the (paid) Claude call so an
+ * over-quota user never triggers billable usage.
+ */
+async function consumeScanQuota(
+  userId: string
+): Promise<{ ok: true; remaining: number } | { ok: false; limit: number; planName: string }> {
+  const now = new Date();
+
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { plan: true, scanCount: true, scanPeriodStart: true },
+    });
+
+    const inCurrentPeriod = isSamePeriod(user.scanPeriodStart, now);
+    const currentCount = inCurrentPeriod ? user.scanCount : 0;
+    const { scanLimit: limit, name: planName } = PLANS[user.plan];
+
+    if (currentCount >= limit) {
+      return { ok: false, limit, planName };
+    }
+
+    await tx.user.update({
+      where: { id: userId },
+      data: inCurrentPeriod
+        ? { scanCount: { increment: 1 } }
+        : { scanCount: 1, scanPeriodStart: now },
+    });
+
+    return { ok: true, remaining: limit - currentCount - 1 };
+  });
 }
 
 function receiptErrorMessage(err: unknown): string {
