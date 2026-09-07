@@ -170,6 +170,24 @@ if [[ -n "$DOMAIN" ]]; then
   else
     SERVER_NAMES="$DOMAIN www.$DOMAIN"
   fi
+  # A separate, always-managed snippet (never the certbot-owned site file
+  # above, which we deliberately stop touching once HTTPS is configured)
+  # so this keeps applying on every redeploy regardless of that file's
+  # state. Nginx's default 1MB body cap rejects a full-resolution camera
+  # photo outright — well below the app's own 8MB limit — and the default
+  # 60s client_body_timeout can be too short to even receive one over a
+  # slow mobile connection.
+  echo "==> Ensuring Nginx allows large, slow uploads (client_max_body_size)"
+  sudo tee /etc/nginx/conf.d/duitku-uploads.conf > /dev/null <<'NGINXCONF'
+# Managed by Duitku's deploy.sh - do not hand-edit, it is overwritten on
+# every deploy. Raises Nginx's upload size/timeout limits so full-
+# resolution camera photos (several MB) aren't rejected before reaching
+# the app, even over a slow mobile connection.
+client_max_body_size 10m;
+client_body_timeout 120s;
+NGINXCONF
+  sudo nginx -t && sudo systemctl reload nginx
+
   if sudo test -f /etc/nginx/sites-available/duitku && sudo grep -q "listen 443" /etc/nginx/sites-available/duitku 2>/dev/null; then
     echo "==> Nginx site for ${SERVER_NAMES} already has HTTPS configured (via certbot) — leaving it untouched"
     echo "    (proxy_pass target/port inside it may need updating manually if APP_PORT changed)"

@@ -145,7 +145,7 @@ export function TransactionModal({
       // actions that no longer exist on the (now-updated) server. A
       // normal retry can't fix this — only a real page reload can.
       setUploadNote({
-        text: "Gagal mengunggah foto. Ini sering terjadi setelah aplikasi baru saja diperbarui — muat ulang halaman ini, lalu coba lagi.",
+        text: "Gagal mengunggah foto. Kemungkinan koneksi internet lambat/terputus saat mengunggah, atau aplikasi baru saja diperbarui — coba pastikan sinyal stabil, muat ulang halaman ini, lalu coba lagi.",
         kind: "error",
         showReload: true,
       });
