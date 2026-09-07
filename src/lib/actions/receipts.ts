@@ -70,13 +70,24 @@ export async function analyzeReceiptAction(
 
   const rawBuffer = Buffer.from(await file.arrayBuffer());
 
-  // Normalize to JPEG and auto-rotate based on the photo's EXIF orientation
-  // tag — phone camera JPEGs are frequently stored "sideways" with an EXIF
-  // flag telling viewers how to rotate them, but a raw byte read (as sent
-  // to the vision API) ignores that flag unless we bake the rotation in.
+  // Normalize before storing/sending to Claude:
+  // - auto-rotate based on EXIF orientation (phone camera JPEGs are often
+  //   stored "sideways" with a flag telling viewers how to rotate them,
+  //   which a raw byte read — as sent to the vision API — ignores unless
+  //   we bake the rotation into the pixels)
+  // - cap the longest edge at 1568px, Anthropic's own recommended max for
+  //   vision input — larger images get downscaled server-side before the
+  //   model reads them anyway, so this only trims upload size/bandwidth
+  //   without losing any detail Claude would actually use. This also
+  //   shrinks full-resolution camera captures (often 3000px+, several MB)
+  //   down to a few hundred KB, so manual compression is never needed.
   let normalizedBuffer: Buffer;
   try {
-    normalizedBuffer = await sharp(rawBuffer).rotate().jpeg({ quality: 90 }).toBuffer();
+    normalizedBuffer = await sharp(rawBuffer)
+      .rotate()
+      .resize({ width: 1568, height: 1568, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 90 })
+      .toBuffer();
   } catch (err) {
     console.error("Failed to normalize receipt image", err);
     normalizedBuffer = rawBuffer;

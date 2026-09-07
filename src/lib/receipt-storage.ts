@@ -10,7 +10,10 @@ export const ALLOWED_RECEIPT_TYPES: Record<string, string> = {
   "image/webp": "webp",
 };
 
-export const MAX_RECEIPT_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+// Raw upload cap, checked before the image is normalized/compressed
+// server-side. Must stay comfortably under next.config.ts's
+// serverActions.bodySizeLimit (8mb) to leave room for multipart overhead.
+export const MAX_RECEIPT_SIZE_BYTES = 7 * 1024 * 1024; // 7MB
 
 export async function saveReceiptImage(
   userId: string,
