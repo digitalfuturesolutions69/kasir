@@ -147,8 +147,12 @@ if [[ -n "$DOMAIN" ]]; then
   else
     SERVER_NAMES="$DOMAIN www.$DOMAIN"
   fi
-  echo "==> Adding a NEW Nginx site for ${SERVER_NAMES} (existing sites untouched)"
-  sudo tee "/etc/nginx/sites-available/duitku" > /dev/null <<EOF
+  if sudo test -f /etc/nginx/sites-available/duitku && sudo grep -q "listen 443" /etc/nginx/sites-available/duitku 2>/dev/null; then
+    echo "==> Nginx site for ${SERVER_NAMES} already has HTTPS configured (via certbot) — leaving it untouched"
+    echo "    (proxy_pass target/port inside it may need updating manually if APP_PORT changed)"
+  else
+    echo "==> Adding a NEW Nginx site for ${SERVER_NAMES} (existing sites untouched)"
+    sudo tee "/etc/nginx/sites-available/duitku" > /dev/null <<EOF
 server {
     listen 80;
     server_name ${SERVER_NAMES};
@@ -166,6 +170,7 @@ server {
     }
 }
 EOF
+  fi
   sudo ln -sf /etc/nginx/sites-available/duitku /etc/nginx/sites-enabled/duitku
   sudo nginx -t
   sudo systemctl reload nginx
