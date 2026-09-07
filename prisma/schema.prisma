@@ -36,12 +36,17 @@ model User {
   // calendar month than "now" — no cron job needed.
   scanCount       Int      @default(0)
   scanPeriodStart DateTime @default(now())
-  // Which AI reads the receipt photo for this user — set in /pengaturan,
-  // or overridden by an admin. See receipts.ts for the dispatch logic.
-  aiProvider      AiProvider @default(CLAUDE)
 
   categories   Category[]
   transactions Transaction[]
+}
+
+// Single-row table (id is always "singleton") for app-wide settings an
+// admin controls from the dashboard — currently just which AI reads
+// everyone's receipt photos. See ai-providers.ts for read/write helpers.
+model AppSettings {
+  id         String     @id @default("singleton")
+  aiProvider AiProvider @default(CLAUDE)
 }
 
 model Category {

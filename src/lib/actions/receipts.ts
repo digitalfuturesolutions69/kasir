@@ -3,7 +3,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import sharp from "sharp";
-import type { AiProvider } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
 import { openai } from "@/lib/openai";
 import { getSession } from "@/lib/auth";
@@ -14,6 +13,7 @@ import {
   saveReceiptImage,
 } from "@/lib/receipt-storage";
 import { PLANS, isSamePeriod } from "@/lib/plans";
+import { getGlobalAiProvider } from "@/lib/app-settings";
 
 export type ExtractedReceipt = {
   type: "INCOME" | "EXPENSE";
@@ -119,10 +119,11 @@ export async function analyzeReceiptAction(
     select: { id: true, name: true, type: true },
   });
   const systemPrompt = buildSystemPrompt(categories);
+  const provider = await getGlobalAiProvider();
 
   try {
     const parsed =
-      quota.provider === "OPENAI"
+      provider === "OPENAI"
         ? await analyzeWithOpenAI(systemPrompt, normalizedBuffer)
         : await analyzeWithClaude(systemPrompt, normalizedBuffer);
 
@@ -148,7 +149,7 @@ export async function analyzeReceiptAction(
       },
     };
   } catch (err) {
-    console.error(`analyzeReceiptAction: ${quota.provider} call failed`, err);
+    console.error(`analyzeReceiptAction: ${provider} call failed`, err);
     return { receiptPath, error: receiptErrorMessage(err) };
   }
 }
@@ -239,13 +240,12 @@ async function analyzeWithOpenAI(
  * Atomically checks and consumes one unit of the user's monthly AI
  * scan quota, rolling the period over first if it has crossed into a
  * new calendar month. Runs before the (paid) AI call so an over-quota
- * user never triggers billable usage. Also returns which provider to
- * use, read in the same transaction to avoid a second round trip.
+ * user never triggers billable usage.
  */
 async function consumeScanQuota(
   userId: string
 ): Promise<
-  | { ok: true; remaining: number; provider: AiProvider }
+  | { ok: true; remaining: number }
   | { ok: false; limit: number; planName: string }
 > {
   const now = new Date();
@@ -253,7 +253,7 @@ async function consumeScanQuota(
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { plan: true, scanCount: true, scanPeriodStart: true, aiProvider: true },
+      select: { plan: true, scanCount: true, scanPeriodStart: true },
     });
 
     const inCurrentPeriod = isSamePeriod(user.scanPeriodStart, now);
@@ -271,7 +271,7 @@ async function consumeScanQuota(
         : { scanCount: 1, scanPeriodStart: now },
     });
 
-    return { ok: true, remaining: limit - currentCount - 1, provider: user.aiProvider };
+    return { ok: true, remaining: limit - currentCount - 1 };
   });
 }
 

@@ -5,7 +5,9 @@ import { AdminStatCards } from "@/components/admin/AdminStatCards";
 import { SignupChart, type SignupPoint } from "@/components/admin/SignupChart";
 import { RecentUsersTable } from "@/components/admin/RecentUsersTable";
 import { PlanDistributionCard } from "@/components/admin/PlanDistributionCard";
+import { GlobalAiProviderCard } from "@/components/admin/GlobalAiProviderCard";
 import { PLAN_ORDER, PLANS } from "@/lib/plans";
+import { getGlobalAiProvider } from "@/lib/app-settings";
 import type { Plan } from "@prisma/client";
 
 export const metadata: Metadata = {
@@ -31,6 +33,7 @@ export default async function AdminPage() {
     recentUsers,
     recentSignups,
     planGroups,
+    globalAiProvider,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
@@ -46,7 +49,6 @@ export default async function AdminPage() {
         email: true,
         createdAt: true,
         plan: true,
-        aiProvider: true,
         _count: { select: { transactions: true } },
       },
     }),
@@ -55,6 +57,7 @@ export default async function AdminPage() {
       select: { createdAt: true },
     }),
     prisma.user.groupBy({ by: ["plan"], _count: { _all: true } }),
+    getGlobalAiProvider(),
   ]);
 
   const totalVolume = (incomeAgg._sum.amount ?? 0) + (expenseAgg._sum.amount ?? 0);
@@ -96,7 +99,10 @@ export default async function AdminPage() {
           <div className="lg:col-span-2">
             <SignupChart data={Array.from(buckets.values())} />
           </div>
-          <PlanDistributionCard counts={planCounts} totalUsers={totalUsers} mrr={mrr} />
+          <div className="space-y-5">
+            <PlanDistributionCard counts={planCounts} totalUsers={totalUsers} mrr={mrr} />
+            <GlobalAiProviderCard provider={globalAiProvider} />
+          </div>
         </div>
 
         <RecentUsersTable
@@ -106,7 +112,6 @@ export default async function AdminPage() {
             email: u.email,
             createdAt: u.createdAt.toISOString(),
             plan: u.plan,
-            aiProvider: u.aiProvider,
             transactionCount: u._count.transactions,
           }))}
         />

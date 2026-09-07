@@ -1,7 +1,6 @@
-import type { Plan, AiProvider } from "@prisma/client";
+import type { Plan } from "@prisma/client";
 import { formatDate } from "@/lib/format";
 import { AdminPlanSelect } from "./AdminPlanSelect";
-import { AdminProviderSelect } from "./AdminProviderSelect";
 
 export type AdminUserRow = {
   id: string;
@@ -9,7 +8,6 @@ export type AdminUserRow = {
   email: string;
   createdAt: string;
   plan: Plan;
-  aiProvider: AiProvider;
   transactionCount: number;
 };
 
@@ -32,7 +30,6 @@ export function RecentUsersTable({ users }: { users: AdminUserRow[] }) {
                 <th className="pb-2 pr-4">Email</th>
                 <th className="pb-2 pr-4">Bergabung</th>
                 <th className="pb-2 pr-4">Paket</th>
-                <th className="pb-2 pr-4">AI</th>
                 <th className="pb-2 text-right">Transaksi</th>
               </tr>
             </thead>
@@ -46,9 +43,6 @@ export function RecentUsersTable({ users }: { users: AdminUserRow[] }) {
                   </td>
                   <td className="py-2.5 pr-4">
                     <AdminPlanSelect userId={u.id} plan={u.plan} />
-                  </td>
-                  <td className="py-2.5 pr-4">
-                    <AdminProviderSelect userId={u.id} provider={u.aiProvider} />
                   </td>
                   <td className="py-2.5 text-right font-medium text-slate-700">
                     {u.transactionCount}
