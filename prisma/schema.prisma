@@ -18,6 +18,11 @@ enum Plan {
   UMKM
 }
 
+enum AiProvider {
+  CLAUDE
+  OPENAI
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -31,6 +36,9 @@ model User {
   // calendar month than "now" — no cron job needed.
   scanCount       Int      @default(0)
   scanPeriodStart DateTime @default(now())
+  // Which AI reads the receipt photo for this user — set in /pengaturan,
+  // or overridden by an admin. See receipts.ts for the dispatch logic.
+  aiProvider      AiProvider @default(CLAUDE)
 
   categories   Category[]
   transactions Transaction[]

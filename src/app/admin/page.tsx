@@ -46,6 +46,7 @@ export default async function AdminPage() {
         email: true,
         createdAt: true,
         plan: true,
+        aiProvider: true,
         _count: { select: { transactions: true } },
       },
     }),
@@ -105,6 +106,7 @@ export default async function AdminPage() {
             email: u.email,
             createdAt: u.createdAt.toISOString(),
             plan: u.plan,
+            aiProvider: u.aiProvider,
             transactionCount: u._count.transactions,
           }))}
         />

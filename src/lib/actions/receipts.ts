@@ -1,8 +1,11 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import sharp from "sharp";
+import type { AiProvider } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
+import { openai } from "@/lib/openai";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
@@ -71,17 +74,18 @@ export async function analyzeReceiptAction(
 
   const rawBuffer = Buffer.from(await file.arrayBuffer());
 
-  // Normalize before storing/sending to Claude:
+  // Normalize before storing/sending to the AI provider:
   // - auto-rotate based on EXIF orientation (phone camera JPEGs are often
   //   stored "sideways" with a flag telling viewers how to rotate them,
-  //   which a raw byte read — as sent to the vision API — ignores unless
+  //   which a raw byte read — as sent to a vision API — ignores unless
   //   we bake the rotation into the pixels)
   // - cap the longest edge at 1568px, Anthropic's own recommended max for
-  //   vision input — larger images get downscaled server-side before the
-  //   model reads them anyway, so this only trims upload size/bandwidth
-  //   without losing any detail Claude would actually use. This also
-  //   shrinks full-resolution camera captures (often 3000px+, several MB)
-  //   down to a few hundred KB, so manual compression is never needed.
+  //   vision input (also comfortably inside OpenAI's limits) — larger
+  //   images get downscaled server-side before the model reads them
+  //   anyway, so this only trims upload size/bandwidth without losing any
+  //   detail the model would actually use. This also shrinks full-
+  //   resolution camera captures (often 3000px+, several MB) down to a
+  //   few hundred KB, so manual compression is never needed.
   let normalizedBuffer: Buffer;
   try {
     normalizedBuffer = await sharp(rawBuffer)
@@ -114,32 +118,13 @@ export async function analyzeReceiptAction(
     where: { userId: session.userId },
     select: { id: true, name: true, type: true },
   });
+  const systemPrompt = buildSystemPrompt(categories);
 
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-5",
-      max_tokens: 512,
-      system: buildSystemPrompt(categories),
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: "image/jpeg",
-                data: normalizedBuffer.toString("base64"),
-              },
-            },
-            { type: "text", text: "Baca bukti transaksi ini." },
-          ],
-        },
-      ],
-    });
-
-    const textBlock = message.content.find((b) => b.type === "text");
-    const parsed = textBlock && textBlock.type === "text" ? parseExtractedJson(textBlock.text) : null;
+    const parsed =
+      quota.provider === "OPENAI"
+        ? await analyzeWithOpenAI(systemPrompt, normalizedBuffer)
+        : await analyzeWithClaude(systemPrompt, normalizedBuffer);
 
     if (!parsed) {
       return {
@@ -163,26 +148,112 @@ export async function analyzeReceiptAction(
       },
     };
   } catch (err) {
-    console.error("analyzeReceiptAction: Claude call failed", err);
+    console.error(`analyzeReceiptAction: ${quota.provider} call failed`, err);
     return { receiptPath, error: receiptErrorMessage(err) };
   }
+}
+
+async function analyzeWithClaude(
+  systemPrompt: string,
+  imageBuffer: Buffer
+): Promise<ParsedReceipt | null> {
+  const message = await anthropic.messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 512,
+    system: systemPrompt,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: "image/jpeg",
+              data: imageBuffer.toString("base64"),
+            },
+          },
+          { type: "text", text: "Baca bukti transaksi ini." },
+        ],
+      },
+    ],
+  });
+
+  const textBlock = message.content.find((b) => b.type === "text");
+  return textBlock && textBlock.type === "text" ? parseExtractedJson(textBlock.text) : null;
+}
+
+// Structured Outputs (json_schema, strict) instead of the prompt-only JSON
+// instruction Claude relies on — GPT vision models are more prone to
+// wrapping JSON in prose/markdown without this, and the schema is cheap
+// to define once. All fields are required (per strict mode's rules);
+// "category" being nullable is expressed via a ["string","null"] type
+// rather than by omitting it from "required".
+const RECEIPT_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    type: { type: "string", enum: ["INCOME", "EXPENSE"] },
+    amount: { type: "number" },
+    description: { type: "string" },
+    confidence: { type: "string", enum: ["high", "medium", "low"] },
+    category: { type: ["string", "null"] },
+  },
+  required: ["type", "amount", "description", "confidence", "category"],
+  additionalProperties: false,
+};
+
+async function analyzeWithOpenAI(
+  systemPrompt: string,
+  imageBuffer: Buffer
+): Promise<ParsedReceipt | null> {
+  const response = await openai.responses.create({
+    model: "gpt-5.5",
+    instructions: systemPrompt,
+    input: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_image",
+            image_url: `data:image/jpeg;base64,${imageBuffer.toString("base64")}`,
+            detail: "high",
+          },
+          { type: "input_text", text: "Baca bukti transaksi ini." },
+        ],
+      },
+    ],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "ekstraksi_struk",
+        schema: RECEIPT_JSON_SCHEMA,
+        strict: true,
+      },
+    },
+  });
+
+  return parseExtractedJson(response.output_text);
 }
 
 /**
  * Atomically checks and consumes one unit of the user's monthly AI
  * scan quota, rolling the period over first if it has crossed into a
- * new calendar month. Runs before the (paid) Claude call so an
- * over-quota user never triggers billable usage.
+ * new calendar month. Runs before the (paid) AI call so an over-quota
+ * user never triggers billable usage. Also returns which provider to
+ * use, read in the same transaction to avoid a second round trip.
  */
 async function consumeScanQuota(
   userId: string
-): Promise<{ ok: true; remaining: number } | { ok: false; limit: number; planName: string }> {
+): Promise<
+  | { ok: true; remaining: number; provider: AiProvider }
+  | { ok: false; limit: number; planName: string }
+> {
   const now = new Date();
 
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { plan: true, scanCount: true, scanPeriodStart: true },
+      select: { plan: true, scanCount: true, scanPeriodStart: true, aiProvider: true },
     });
 
     const inCurrentPeriod = isSamePeriod(user.scanPeriodStart, now);
@@ -200,18 +271,18 @@ async function consumeScanQuota(
         : { scanCount: 1, scanPeriodStart: now },
     });
 
-    return { ok: true, remaining: limit - currentCount - 1 };
+    return { ok: true, remaining: limit - currentCount - 1, provider: user.aiProvider };
   });
 }
 
 function receiptErrorMessage(err: unknown): string {
-  if (err instanceof Anthropic.AuthenticationError) {
+  if (err instanceof Anthropic.AuthenticationError || err instanceof OpenAI.AuthenticationError) {
     return "Foto tersimpan, tapi fitur baca otomatis belum aktif (API key belum diatur). Isi manual di bawah.";
   }
-  if (err instanceof Anthropic.RateLimitError) {
+  if (err instanceof Anthropic.RateLimitError || err instanceof OpenAI.RateLimitError) {
     return "Foto tersimpan, tapi layanan AI sedang sibuk. Coba lagi sebentar, atau isi manual.";
   }
-  if (err instanceof Anthropic.APIError) {
+  if (err instanceof Anthropic.APIError || err instanceof OpenAI.APIError) {
     return "Foto tersimpan, tapi AI gagal membaca bukti ini. Isi manual di bawah.";
   }
   return "Foto tersimpan, tapi terjadi kesalahan saat membaca. Isi manual di bawah.";
