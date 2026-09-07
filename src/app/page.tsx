@@ -294,6 +294,11 @@ function Footer() {
           </span>
           Duitku
         </div>
+        <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+          <Link href="/contact" className="hover:text-slate-900">Kontak</Link>
+          <Link href="/privacy" className="hover:text-slate-900">Kebijakan Privasi</Link>
+          <Link href="/terms" className="hover:text-slate-900">Syarat &amp; Ketentuan</Link>
+        </nav>
         <p>© {new Date().getFullYear()} Duitku. Semua hak dilindungi.</p>
       </div>
     </footer>

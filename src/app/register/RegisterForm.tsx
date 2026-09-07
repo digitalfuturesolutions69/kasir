@@ -47,6 +47,18 @@ export function RegisterForm() {
         {pending ? "Membuat akun..." : "Buat Akun Gratis"}
       </Button>
 
+      <p className="text-center text-xs text-slate-400">
+        Dengan mendaftar, Anda menyetujui{" "}
+        <Link href="/terms" className="underline hover:text-slate-600">
+          Syarat &amp; Ketentuan
+        </Link>{" "}
+        dan{" "}
+        <Link href="/privacy" className="underline hover:text-slate-600">
+          Kebijakan Privasi
+        </Link>{" "}
+        kami.
+      </p>
+
       <p className="text-center text-sm text-slate-500">
         Sudah punya akun?{" "}
         <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-700">
