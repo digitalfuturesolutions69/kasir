@@ -95,6 +95,22 @@ export function TransactionModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Mirrors MAX_RECEIPT_SIZE_BYTES in lib/receipt-storage.ts — checked
+    // here too so an oversized camera photo (easily 5-15MB at full
+    // resolution) fails instantly with a clear message instead of after
+    // a slow upload attempt that the server would reject anyway.
+    const MAX_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setPreviewUrl(URL.createObjectURL(file));
+      setUploadNote({
+        text: "Ukuran foto terlalu besar (maks 5MB). Coba ambil foto lagi atau kompres dulu.",
+        kind: "error",
+      });
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
+      if (galleryInputRef.current) galleryInputRef.current.value = "";
+      return;
+    }
+
     setPreviewUrl(URL.createObjectURL(file));
     setUploadNote(null);
     setUploading(true);
