@@ -1,4 +1,5 @@
 import Link from "next/link";
+import clsx from "clsx";
 import {
   Wallet,
   ArrowRight,
@@ -9,9 +10,12 @@ import {
   Tags,
   BarChart3,
   Check,
+  Sparkles,
 } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
+import { PLAN_ORDER, PLANS } from "@/lib/plans";
+import { formatCurrency } from "@/lib/format";
 
 export default async function Home() {
   const session = await getSession();
@@ -24,6 +28,7 @@ export default async function Home() {
       <LogoStrip />
       <Features />
       <HowItWorks />
+      <Pricing />
       <CTA primaryHref={primaryHref} isAuthed={!!session} />
       <Footer />
     </div>
@@ -43,6 +48,7 @@ function Nav({ isAuthed }: { isAuthed: boolean }) {
         <nav className="hidden items-center gap-8 text-sm font-medium text-slate-600 md:flex">
           <a href="#fitur" className="hover:text-slate-900">Fitur</a>
           <a href="#cara-kerja" className="hover:text-slate-900">Cara Kerja</a>
+          <a href="#harga" className="hover:text-slate-900">Harga</a>
         </nav>
         <div className="flex items-center gap-3">
           {isAuthed ? (
@@ -255,6 +261,78 @@ function HowItWorks() {
             </div>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
+
+function Pricing() {
+  return (
+    <section id="harga" className="bg-white py-24">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            Paket yang sesuai kebutuhan Anda
+          </h2>
+          <p className="mt-4 text-lg text-slate-600">
+            Mulai gratis, upgrade kapan saja saat kebutuhan scan struk AI Anda bertambah.
+          </p>
+        </div>
+
+        <div className="mt-14 grid gap-6 sm:grid-cols-3">
+          {PLAN_ORDER.map((planId) => {
+            const plan = PLANS[planId];
+            const featured = planId === "PRO";
+            return (
+              <div
+                key={planId}
+                className={clsx(
+                  "relative flex flex-col gap-5 rounded-2xl border bg-white p-7",
+                  featured
+                    ? "border-indigo-300 shadow-xl shadow-indigo-900/10"
+                    : "border-slate-200"
+                )}
+              >
+                {featured && (
+                  <span className="absolute -top-3 left-7 inline-flex items-center gap-1 rounded-full bg-indigo-600 px-3 py-1 text-xs font-semibold text-white">
+                    <Sparkles className="h-3 w-3" />
+                    Paling Populer
+                  </span>
+                )}
+                <div>
+                  <p className="font-semibold text-slate-900">{plan.name}</p>
+                  <p className="mt-1 text-sm text-slate-500">{plan.tagline}</p>
+                </div>
+                <div>
+                  <span className="text-3xl font-bold text-slate-900">
+                    {plan.priceMonthly === 0 ? "Gratis" : formatCurrency(plan.priceMonthly)}
+                  </span>
+                  {plan.priceMonthly > 0 && (
+                    <span className="text-sm text-slate-400">/bulan</span>
+                  )}
+                </div>
+                <ul className="flex-1 space-y-2.5 text-sm text-slate-600">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2">
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <Link href="/register">
+                  <Button variant={featured ? "primary" : "secondary"} fullWidth>
+                    {plan.priceMonthly === 0 ? "Mulai Gratis" : "Pilih Paket"}
+                  </Button>
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="mt-8 text-center text-sm text-slate-400">
+          Semua paket termasuk kategori tak terbatas dan grafik keuangan otomatis. Harga dalam
+          Rupiah, bisa upgrade/downgrade kapan saja setelah masuk.
+        </p>
       </div>
     </section>
   );
