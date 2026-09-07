@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import {
   hashPassword,
@@ -10,6 +11,19 @@ import {
   clearSessionCookie,
 } from "@/lib/auth";
 import { DEFAULT_CATEGORIES } from "@/lib/default-categories";
+import { isRateLimited } from "@/lib/rate-limit";
+
+async function clientIp() {
+  const h = await headers();
+  // Nginx's $proxy_add_x_forwarded_for appends the real peer address as
+  // the LAST entry, after whatever the client itself claimed — so the
+  // first entry is attacker-controlled (trivially spoofable to dodge
+  // rate limiting) and only the last one is trustworthy here, since
+  // there's exactly one hop between the client and this app.
+  const forwardedFor = h.get("x-forwarded-for");
+  const last = forwardedFor?.split(",").pop()?.trim();
+  return last || h.get("x-real-ip") || "unknown";
+}
 
 export type AuthFormState = {
   error?: string;
@@ -30,6 +44,11 @@ export async function registerAction(
   _prevState: AuthFormState,
   formData: FormData
 ): Promise<AuthFormState> {
+  const ip = await clientIp();
+  if (isRateLimited(`register:${ip}`, 5, 60 * 60 * 1000)) {
+    return { error: "Terlalu banyak percobaan daftar dari perangkat ini. Coba lagi nanti." };
+  }
+
   const parsed = registerSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
@@ -68,6 +87,11 @@ export async function loginAction(
   _prevState: AuthFormState,
   formData: FormData
 ): Promise<AuthFormState> {
+  const ip = await clientIp();
+  if (isRateLimited(`login:${ip}`, 8, 5 * 60 * 1000)) {
+    return { error: "Terlalu banyak percobaan masuk. Coba lagi dalam beberapa menit." };
+  }
+
   const parsed = loginSchema.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),

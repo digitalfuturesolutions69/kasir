@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 const SESSION_COOKIE = "session";
-const PROTECTED_PREFIXES = ["/dashboard", "/transactions", "/categories", "/admin"];
+const PROTECTED_PREFIXES = ["/dashboard", "/transactions", "/categories", "/paket", "/admin"];
 const AUTH_PAGES = ["/login", "/register"];
 
 async function hasValidSession(request: NextRequest) {
@@ -51,6 +51,7 @@ export const config = {
     "/dashboard/:path*",
     "/transactions/:path*",
     "/categories/:path*",
+    "/paket/:path*",
     "/admin/:path*",
     "/login",
     "/register",
