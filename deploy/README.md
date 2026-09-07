@@ -76,6 +76,27 @@ sudo apt-get install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d duitku.namadomainanda.com
 ```
 
+## Mengaktifkan fitur "baca foto bukti transaksi otomatis"
+
+Fitur upload foto struk/bukti transfer (yang otomatis mengisi jumlah &
+jenis transaksi via AI) butuh `ANTHROPIC_API_KEY`. Tanpa ini, upload foto
+tetap tersimpan sebagai lampiran, tapi pengguna harus isi jumlah & jenis
+secara manual.
+
+1. Ambil API key di https://console.anthropic.com/
+2. Di VPS, edit `.env` aplikasi (dibuat otomatis oleh `deploy.sh` di `~/duitku/.env`):
+   ```bash
+   nano ~/duitku/.env
+   ```
+   Tambahkan baris:
+   ```
+   ANTHROPIC_API_KEY="sk-ant-xxxxxxxxxxxxxxxx"
+   ```
+3. Restart aplikasi supaya env baru terbaca:
+   ```bash
+   pm2 restart duitku
+   ```
+
 ## Yang dilakukan script ini (dan yang TIDAK dilakukan)
 
 Dilakukan:
