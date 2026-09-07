@@ -3,7 +3,10 @@ import { Mail, MessageCircle } from "lucide-react";
 import { LegalPage, LegalSection } from "@/components/legal/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Kontak — Duitku",
+  title: "Kontak",
+  description:
+    "Punya pertanyaan atau butuh bantuan soal Duitku? Hubungi kami lewat email atau WhatsApp.",
+  alternates: { canonical: "/contact" },
 };
 
 export default function ContactPage() {

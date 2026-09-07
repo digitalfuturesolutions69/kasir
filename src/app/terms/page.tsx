@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { LegalPage, LegalSection } from "@/components/legal/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Syarat & Ketentuan — Duitku",
+  title: "Syarat & Ketentuan",
+  description:
+    "Baca syarat dan ketentuan penggunaan layanan Duitku, termasuk tanggung jawab akun dan batasan layanan.",
+  alternates: { canonical: "/terms" },
 };
 
 export default function TermsPage() {

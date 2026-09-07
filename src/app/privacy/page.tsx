@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { LegalPage, LegalSection } from "@/components/legal/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Kebijakan Privasi — Duitku",
+  title: "Kebijakan Privasi",
+  description:
+    "Pelajari data apa saja yang dikumpulkan Duitku, bagaimana data itu digunakan dan diamankan, serta hak Anda atas data pribadi Anda.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {

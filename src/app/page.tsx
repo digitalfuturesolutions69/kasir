@@ -17,6 +17,26 @@ import { getSession } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { PLAN_ORDER, PLANS } from "@/lib/plans";
 import { formatCurrency } from "@/lib/format";
+import { SITE_URL, SITE_NAME, SITE_DESCRIPTION } from "@/lib/site";
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: SITE_NAME,
+  description: SITE_DESCRIPTION,
+  url: SITE_URL,
+  applicationCategory: "FinanceApplication",
+  operatingSystem: "Web",
+  offers: PLAN_ORDER.map((planId) => {
+    const plan = PLANS[planId];
+    return {
+      "@type": "Offer",
+      name: plan.name,
+      price: String(plan.priceMonthly),
+      priceCurrency: "IDR",
+    };
+  }),
+};
 
 export default async function Home() {
   const session = await getSession();
@@ -24,6 +44,10 @@ export default async function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Nav isAuthed={!!session} />
       <Hero primaryHref={primaryHref} isAuthed={!!session} />
       <LogoStrip />
