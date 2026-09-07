@@ -27,8 +27,8 @@ export type EditingTransaction = {
 const initialState: TransactionFormState = {};
 
 const CONFIDENCE_LABEL: Record<string, string> = {
-  high: "Terbaca dengan yakin",
-  medium: "Terbaca, mohon periksa kembali",
+  high: "Terisi otomatis — cek sebelum simpan",
+  medium: "Terisi otomatis, mohon periksa kembali",
   low: "Kurang yakin — periksa kembali",
 };
 
