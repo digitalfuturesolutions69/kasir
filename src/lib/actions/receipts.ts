@@ -279,8 +279,17 @@ function receiptErrorMessage(err: unknown): string {
   if (err instanceof Anthropic.AuthenticationError || err instanceof OpenAI.AuthenticationError) {
     return "Foto tersimpan, tapi fitur baca otomatis belum aktif (API key belum diatur). Isi manual di bawah.";
   }
+  // Both providers surface "no credit/quota left" as a 429, same as a
+  // plain rate limit — but it needs its own message since "coba lagi
+  // sebentar" is misleading when the real fix is topping up billing.
+  // Anthropic marks this `error.type: "billing_error"`, OpenAI
+  // `type: "insufficient_quota"`; both land on `err.type` directly.
+  const errorType = (err as { type?: unknown } | null)?.type;
+  if (errorType === "billing_error" || errorType === "insufficient_quota") {
+    return "Foto tersimpan, tapi saldo/kredit API AI sudah habis. Isi ulang billing provider AI-nya (lihat log server untuk detail), atau isi manual di bawah.";
+  }
   if (err instanceof Anthropic.RateLimitError || err instanceof OpenAI.RateLimitError) {
-    return "Foto tersimpan, tapi layanan AI sedang sibuk. Coba lagi sebentar, atau isi manual.";
+    return "Foto tersimpan, tapi layanan AI sedang sibuk (terlalu banyak permintaan). Coba lagi sebentar, atau isi manual.";
   }
   if (err instanceof Anthropic.APIError || err instanceof OpenAI.APIError) {
     return "Foto tersimpan, tapi AI gagal membaca bukti ini. Isi manual di bawah.";
